@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  time-tracking-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: time-tracking-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      # Database connection - using existing finance-db container
+      SPRING_DATASOURCE_URL: jdbc:postgresql://finance-db:5432/time_tracking
+      SPRING_DATASOURCE_USERNAME: timetrack_user
+      SPRING_DATASOURCE_PASSWORD: SecurePass123!
+
+      # Server configuration
+      SERVER_PORT: 8081
+
+      # JPA configuration
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+    networks:
+      - finance_default
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  finance_default:
+    external: true

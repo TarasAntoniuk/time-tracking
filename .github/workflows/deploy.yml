@@ -1,0 +1,126 @@
+name: Deploy Time Tracking
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '17'
+  JAVA_DISTRIBUTION: 'temurin'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'maven'
+
+      - name: Package JAR
+        run: |
+          mvn clean package -DskipTests
+          echo "📦 Built artifact:"
+          ls -lh target/*.jar
+
+      - name: Setup SSH key
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s" "$SERVER_SSH_KEY" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Prepare deployment directories
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }} \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            set -e
+            APP_DIR=/srv/apps/time-tracking
+            sudo mkdir -p $APP_DIR/docker/app
+            sudo chown -R deploy:deploy $APP_DIR
+            echo "✅ Directories ready"
+          ENDSSH
+
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Copy JAR to server
+        run: |
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }}" \
+            target/*.jar \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/srv/apps/time-tracking/docker/app/app.jar
+
+      - name: Copy Docker files
+        run: |
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }}" \
+            docker/ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/srv/apps/time-tracking/docker/
+
+      - name: Deploy application
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }} \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            set -e
+            cd /srv/apps/time-tracking/docker
+          
+            echo "🔄 Stopping old containers..."
+            docker compose down --remove-orphans || true
+          
+            echo "🚀 Starting Time Tracking API..."
+            docker compose up -d --build
+          
+            echo "✅ Deployment completed"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }} \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+          
+            echo "📦 Running containers:"
+            docker ps | grep time-tracking
+          
+            echo ""
+            echo "🏥 Health check (with retry)..."
+            SUCCESS=false
+            for i in {1..30}; do
+              if curl -f http://localhost:8081/api/employees 2>/dev/null; then
+                echo ""
+                echo "✅ Time Tracking API is healthy!"
+                SUCCESS=true
+                break
+              fi
+              echo "⏳ Attempt $i/30 - waiting for application..."
+              sleep 2
+            done
+          
+            if [ "$SUCCESS" = true ]; then
+              exit 0
+            else
+              echo ""
+              echo "❌ Health check failed after 60 seconds"
+              echo "📋 Application logs:"
+              docker logs time-tracking-app --tail 50
+              exit 1
+            fi
+          ENDSSH
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Time Tracking deployment completed successfully!"
+            echo "🌐 API: https://timetracking.tarasantoniuk.com/api/employees"
+            echo "📚 Swagger: https://timetracking.tarasantoniuk.com/swagger-ui.html"
+          else
+            echo "❌ Deployment failed! Check logs above."
+          fi
