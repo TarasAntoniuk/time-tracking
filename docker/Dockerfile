@@ -1,7 +1,7 @@
 # Dockerfile for Time Tracking API
 # This uses pre-built JAR from GitHub Actions
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
