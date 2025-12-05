@@ -3,7 +3,7 @@ name: Deploy Time Tracking
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 env:
