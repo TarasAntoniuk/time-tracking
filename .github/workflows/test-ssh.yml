@@ -1,0 +1,82 @@
+name: Test SSH Connection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ssh-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Print variables for debugging
+      - name: Debug variables
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
+        run: |
+          echo "Server host length: ${#SERVER_HOST}"
+          echo "Server user length: ${#SERVER_USER}"
+          echo "Server port: $SERVER_SSH_PORT"
+
+      # 2. Setup SSH key
+      - name: Setup SSH key
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s" "$SERVER_SSH_KEY" | base64 -d > ~/.ssh/github_deploy_key
+          chmod 600 ~/.ssh/github_deploy_key
+          ls -la ~/.ssh/
+
+      # 3. Create SSH config file
+      - name: Create SSH config
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
+        run: |
+          cat > ~/.ssh/config <<EOF
+          Host deployserver
+            HostName $SERVER_HOST
+            User $SERVER_USER
+            Port $SERVER_SSH_PORT
+            IdentityFile ~/.ssh/github_deploy_key
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
+          cat ~/.ssh/config
+
+      # 4. Test SSH connection
+      - name: Test SSH connection
+        run: |
+          ssh deployserver "echo '✅ SSH connection successful!' && hostname && whoami && pwd"
+
+      # 5. Check server directory structure
+      - name: Check server directories
+        run: |
+          ssh deployserver "ls -la /srv/apps/"
+
+      # 6. Check Docker installation
+      - name: Check Docker
+        run: |
+          ssh deployserver "docker --version && docker ps | grep -E 'finance|postgres'"
+
+      # 7. Check PostgreSQL database
+      - name: Check PostgreSQL database
+        run: |
+          ssh deployserver "docker exec finance-db psql -U test_user -d finance_db -c '\l' | grep time_tracking || echo 'Database time_tracking not found'"
+
+      # 8. Check Docker network
+      - name: Check Docker network
+        run: |
+          ssh deployserver "docker network ls | grep finance"
+
+      # 9. Summary
+      - name: Summary
+        run: |
+          echo "✅ SSH connection test completed successfully!"
+          echo "🐳 Docker is running"
+          echo "📁 /srv/apps/ is accessible"
+          echo "🎯 Ready for deployment!"

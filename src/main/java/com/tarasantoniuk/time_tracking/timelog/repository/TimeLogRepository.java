@@ -32,8 +32,8 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long> {
                     ORDER BY tl.check_time
                 ) AS rn
             FROM time_logs tl
-            WHERE tl.employee_id = :employeeId 
-              AND tl.check_time >= :from 
+            WHERE tl.employee_id = :employeeId\s
+              AND tl.check_time >= :from\s
               AND tl.check_time < :to
         ),
         paired AS (
@@ -60,7 +60,7 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long> {
             WHERE time_in IS NOT NULL
             GROUP BY employee_id, work_date
         )
-        SELECT 
+        SELECT\s
             ds.employee_id,
             e.first_name,
             e.last_name,
@@ -72,7 +72,7 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long> {
         FROM daily_summary ds
         JOIN employees e ON e.id = ds.employee_id
         ORDER BY ds.work_date
-        """, nativeQuery = true)
+       \s""", nativeQuery = true)
     List<DailyWorkProjection> calculateTimesheetNative(
             @Param("employeeId") Long employeeId,
             @Param("from") LocalDateTime from,
@@ -81,9 +81,9 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long> {
 
     // Find employees who were present at a specific time
     @Query(value = """
-        SELECT DISTINCT employee_id 
+        SELECT DISTINCT employee_id\s
         FROM (
-            SELECT 
+            SELECT\s
                 employee_id,
                 check_time,
                 ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY check_time) as rn
@@ -92,14 +92,14 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long> {
         ) t
         WHERE rn % 2 = 1
         AND NOT EXISTS (
-            SELECT 1 
-            FROM time_logs t2 
-            WHERE t2.employee_id = t.employee_id 
-              AND t2.check_time > t.check_time 
+            SELECT 1\s
+            FROM time_logs t2\s
+            WHERE t2.employee_id = t.employee_id\s
+              AND t2.check_time > t.check_time\s
               AND t2.check_time <= :atTime
             HAVING COUNT(*) % 2 = 1
         )
-        """, nativeQuery = true)
+       \s""", nativeQuery = true)
     List<Long> findPresentEmployees(@Param("atTime") LocalDateTime atTime);
 
     // Interface for projection with employee data
