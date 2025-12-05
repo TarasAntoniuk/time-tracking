@@ -65,6 +65,20 @@ jobs:
             docker/ \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/srv/apps/time-tracking/docker/
 
+      - name: Copy nginx config to finance
+        run: |
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }}" \
+            docker/nginx/conf.d/time-tracking.conf \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/srv/apps/finance/docker/nginx/conf.d/time-tracking.conf
+
+      - name: Reload nginx
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }} \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            docker restart finance-nginx
+            echo "✅ Nginx reloaded"
+          ENDSSH
+
       - name: Deploy application
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }} \
@@ -93,7 +107,7 @@ jobs:
             echo "🏥 Health check (with retry)..."
             SUCCESS=false
             for i in {1..30}; do
-              if curl -f http://localhost:8081/api/employees 2>/dev/null; then
+              if curl -f https://timetracking.tarasantoniuk.com/api/employees 2>/dev/null; then
                 echo ""
                 echo "✅ Time Tracking API is healthy!"
                 SUCCESS=true
