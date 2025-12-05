@@ -14,3 +14,7 @@ target/
 
 
 /src/main/resources/env/env.dev.properties
+/.gitattributes
+/.mvn/wrapper/maven-wrapper.properties
+/mvnw
+/mvnw.cmd
