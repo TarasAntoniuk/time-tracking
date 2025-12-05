@@ -18,3 +18,4 @@ target/
 /.mvn/wrapper/maven-wrapper.properties
 /mvnw
 /mvnw.cmd
+/sql/time_tr_backup.sql
