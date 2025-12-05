@@ -1,0 +1,5 @@
+SELECT employee_id, check_time 
+FROM time_logs 
+WHERE employee_id = 1 
+  AND check_time::date = '2024-11-01'
+ORDER BY check_time;
