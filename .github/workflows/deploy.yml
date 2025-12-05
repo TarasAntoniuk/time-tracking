@@ -87,7 +87,8 @@ jobs:
             cd /srv/apps/time-tracking/docker
           
             echo "🔄 Stopping old containers..."
-            docker compose down --remove-orphans || true
+            docker compose stop time-tracking-app || true
+            docker rm time-tracking-app || true
           
             echo "🚀 Starting Time Tracking API..."
             docker compose up -d --build
