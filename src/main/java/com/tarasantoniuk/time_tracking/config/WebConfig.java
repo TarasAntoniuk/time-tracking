@@ -12,7 +12,9 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addMapping("/api/**")
                 .allowedOrigins(
                         "https://timetracking.tarasantoniuk.com",
-                        "http://localhost:8081"
+                        "https://tarasantoniuk.com",
+                        "http://localhost:8081",
+                        "http://localhost:63342"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
