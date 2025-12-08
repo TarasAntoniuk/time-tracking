@@ -1,5 +1,6 @@
 package com.tarasantoniuk.time_tracking.timelog.controller;
 
+import com.tarasantoniuk.time_tracking.employee.dto.PresentEmployeesResponse;
 import com.tarasantoniuk.time_tracking.timelog.dto.TimeLogRequest;
 import com.tarasantoniuk.time_tracking.timelog.dto.TimeLogResponse;
 import com.tarasantoniuk.time_tracking.timelog.dto.TimesheetResponse;
@@ -7,6 +8,7 @@ import com.tarasantoniuk.time_tracking.timelog.service.TimeLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -20,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/time-logs")
@@ -111,13 +112,47 @@ public class TimeLogController {
 
     @Operation(
             summary = "Get present employees",
-            description = "Get list of employee IDs who were present in the building at a specific time. " +
-                    "Logic: odd number of check-ins means employee is currently inside."
+            description = "Get list of employees who were present in the building at a specific time with their full details (ID, first name, last name). " +
+                    "Logic: odd number of check-ins means employee is currently inside. " +
+                    "Returns employee information in a single optimized query to avoid N+1 problem."
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "List of present employees retrieved successfully"
+                    description = "List of present employees with details retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PresentEmployeesResponse.class),
+                            examples = @ExampleObject(
+                                    name = "Present employees example",
+                                    value = """
+                                {
+                                  "time": "2024-11-15T14:30:00",
+                                  "count": 3,
+                                  "employees": [
+                                    {
+                                      "id": 1,
+                                      "firstName": "Carlos",
+                                      "lastName": "García",
+                                      "createdAt": "2024-11-01T10:00:00"
+                                    },
+                                    {
+                                      "id": 2,
+                                      "firstName": "María",
+                                      "lastName": "Rodríguez",
+                                      "createdAt": "2024-11-01T10:05:00"
+                                    },
+                                    {
+                                      "id": 4,
+                                      "firstName": "Ana",
+                                      "lastName": "López",
+                                      "createdAt": "2024-11-01T10:15:00"
+                                    }
+                                  ]
+                                }
+                                """
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "400",
@@ -125,23 +160,16 @@ public class TimeLogController {
             )
     })
     @GetMapping("/present")
-    public ResponseEntity<Map<String, Object>> getPresentEmployees(
+    public ResponseEntity<PresentEmployeesResponse> getPresentEmployees(
             @Parameter(
                     description = "Time to check presence (ISO 8601 format)",
-                    required = true,
-                    example = "2024-11-15T14:30:00"
+                    example = "2024-11-15T14:30:00",
+                    required = true
             )
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-            LocalDateTime time
+            @RequestParam("time") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime time
     ) {
-        List<Long> employeeIds = timeLogService.getPresentEmployees(time);
-
-        return ResponseEntity.ok(Map.of(
-                "time", time,
-                "employee_ids", employeeIds,
-                "count", employeeIds.size()
-        ));
+        PresentEmployeesResponse response = timeLogService.getPresentEmployeesWithDetails(time);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(

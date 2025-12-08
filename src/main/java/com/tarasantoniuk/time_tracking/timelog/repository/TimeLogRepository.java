@@ -79,8 +79,15 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long> {
             @Param("to") LocalDateTime to
     );
 
-    // Find employees who were present at a specific time
+    // Find employees who were present at a specific time WITH their details
     @Query(value = """
+    SELECT\s
+        e.id as employeeId,
+        e.first_name as firstName,
+        e.last_name as lastName,
+        e.created_at as createdAt
+    FROM employees e
+    WHERE e.id IN (
         SELECT DISTINCT employee_id\s
         FROM (
             SELECT\s
@@ -99,8 +106,17 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long> {
               AND t2.check_time <= :atTime
             HAVING COUNT(*) % 2 = 1
         )
-       \s""", nativeQuery = true)
-    List<Long> findPresentEmployees(@Param("atTime") LocalDateTime atTime);
+    )
+   \s""", nativeQuery = true)
+    List<PresentEmployeeProjection> findPresentEmployeesWithDetails(@Param("atTime") LocalDateTime atTime);
+
+    // Interface for present employees projection
+    interface PresentEmployeeProjection {
+        Long getEmployeeId();
+        String getFirstName();
+        String getLastName();
+        java.sql.Timestamp getCreatedAt();
+    }
 
     // Interface for projection with employee data
     interface DailyWorkProjection {

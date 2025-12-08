@@ -1,5 +1,7 @@
 package com.tarasantoniuk.time_tracking.timelog.service;
 
+import com.tarasantoniuk.time_tracking.employee.dto.EmployeeResponse;
+import com.tarasantoniuk.time_tracking.employee.dto.PresentEmployeesResponse;
 import com.tarasantoniuk.time_tracking.timelog.dto.DailyWorkResponse;
 import com.tarasantoniuk.time_tracking.timelog.dto.TimeLogRequest;
 import com.tarasantoniuk.time_tracking.timelog.dto.TimeLogResponse;
@@ -98,11 +100,27 @@ public class TimeLogService {
                 .build();
     }
 
-    // Get list of employees who were present at a specific time
-    public List<Long> getPresentEmployees(LocalDateTime atTime) {
-        List<Long> presentIds = timeLogRepository.findPresentEmployees(atTime);
-        log.info("Present employees at {}: {}", atTime, presentIds);
-        return presentIds;
+    // Додай новий метод замість старого getPresentEmployees
+    public PresentEmployeesResponse getPresentEmployeesWithDetails(LocalDateTime atTime) {
+        List<TimeLogRepository.PresentEmployeeProjection> projections =
+                timeLogRepository.findPresentEmployeesWithDetails(atTime);
+
+        List<EmployeeResponse> employees = projections.stream()
+                .map(proj -> EmployeeResponse.builder()
+                        .id(proj.getEmployeeId())
+                        .firstName(proj.getFirstName())
+                        .lastName(proj.getLastName())
+                        .createdAt(proj.getCreatedAt() != null ? proj.getCreatedAt().toLocalDateTime() : null)
+                        .build())
+                .collect(Collectors.toList());
+
+        log.info("Present employees at {}: {} employees", atTime, employees.size());
+
+        return PresentEmployeesResponse.builder()
+                .time(atTime)
+                .count(employees.size())
+                .employees(employees)
+                .build();
     }
 
     // Get all check-ins for an employee within a period
