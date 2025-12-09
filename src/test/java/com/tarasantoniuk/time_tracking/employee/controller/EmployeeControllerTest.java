@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class EmployeeControllerTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
             .withPassword("test");
@@ -268,5 +268,58 @@ class EmployeeControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.firstName").value("Jean-Pierre"))
                 .andExpect(jsonPath("$.lastName").value("O'Brien"));
+    }
+
+    @Test
+    @DisplayName("GET /api/employees - Should return all employees when search is null")
+    void shouldReturnAllEmployeesWhenSearchIsNull() throws Exception {
+        // Given
+        Employee emp1 = new Employee();
+        emp1.setFirstName("John");
+        emp1.setLastName("Doe");
+
+        Employee emp2 = new Employee();
+        emp2.setFirstName("Jane");
+        emp2.setLastName("Smith");
+
+        employeeRepository.save(emp1);
+        employeeRepository.save(emp2);
+
+        // When & Then - Don't pass search parameter
+        mockMvc.perform(get("/api/employees"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    @Test
+    @DisplayName("GET /api/employees?search= - Should return all employees when search is empty")
+    void shouldReturnAllEmployeesWhenSearchIsEmpty() throws Exception {
+        // Given
+        Employee emp1 = new Employee();
+        emp1.setFirstName("John");
+        emp1.setLastName("Doe");
+
+        employeeRepository.save(emp1);
+
+        // When & Then - Empty search parameter
+        mockMvc.perform(get("/api/employees").param("search", ""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("GET /api/employees?search=   - Should return all employees when search is only spaces")
+    void shouldReturnAllEmployeesWhenSearchIsOnlySpaces() throws Exception {
+        // Given
+        Employee emp1 = new Employee();
+        emp1.setFirstName("John");
+        emp1.setLastName("Doe");
+
+        employeeRepository.save(emp1);
+
+        // When & Then - Search with only spaces
+        mockMvc.perform(get("/api/employees").param("search", "   "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
     }
 }
