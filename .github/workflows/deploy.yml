@@ -11,8 +11,39 @@ env:
   JAVA_DISTRIBUTION: 'temurin'
 
 jobs:
+  # Test and validation job
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'maven'
+
+      - name: Run tests with coverage
+        run: mvn clean verify
+
+      - name: Upload coverage report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/site/jacoco/
+
+      - name: Check coverage thresholds
+        run: |
+          echo "✅ Tests passed with required coverage thresholds"
+
+  # Deploy only if tests pass
   deploy:
     runs-on: ubuntu-latest
+    needs: test
 
     steps:
       - name: Checkout code

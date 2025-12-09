@@ -81,6 +81,19 @@
             <version>2.3.0</version>
         </dependency>
 
+        <!-- Fix CVE-2024-25710 and CVE-2024-26308 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.27.1</version>
+        </dependency>
+
+        <!-- Fix CVE-2025-48924 - upgrade to newer version -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.18.0</version>  <!-- Change from 3.17.0 to 3.18.0 -->
+        </dependency>
     </dependencies>
 
     <build>
@@ -143,17 +156,17 @@
                                 <rule>
                                     <element>BUNDLE</element>
                                     <limits>
-                                        <!-- Minimum 80% line coverage -->
+                                        <!-- Minimum 90% line coverage -->
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.50</minimum>
+                                            <minimum>0.90</minimum>
                                         </limit>
-                                        <!-- Minimum 75% branch coverage (if/else) -->
+                                        <!-- Minimum 85% branch coverage (if/else) -->
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.50</minimum>
+                                            <minimum>0.85</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
