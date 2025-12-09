@@ -2,6 +2,8 @@ package com.tarasantoniuk.time_tracking.timelog.service;
 
 import com.tarasantoniuk.time_tracking.employee.dto.EmployeeResponse;
 import com.tarasantoniuk.time_tracking.employee.dto.PresentEmployeesResponse;
+import com.tarasantoniuk.time_tracking.employee.repository.EmployeeRepository;
+import com.tarasantoniuk.time_tracking.exception.ResourceNotFoundException;
 import com.tarasantoniuk.time_tracking.timelog.dto.DailyWorkResponse;
 import com.tarasantoniuk.time_tracking.timelog.dto.TimeLogRequest;
 import com.tarasantoniuk.time_tracking.timelog.dto.TimeLogResponse;
@@ -24,10 +26,16 @@ import java.util.stream.Collectors;
 public class TimeLogService {
 
     private final TimeLogRepository timeLogRepository;
+    private final EmployeeRepository employeeRepository;
 
     // Create a check-in record
     @Transactional
     public TimeLogResponse createTimeLog(TimeLogRequest request) {
+        // Verify that employee exists before creating time log
+        if (!employeeRepository.existsById(request.getEmployeeId())) {
+            throw new ResourceNotFoundException("Employee", request.getEmployeeId());
+        }
+
         TimeLog timeLog = new TimeLog();
         timeLog.setEmployeeId(request.getEmployeeId());
         timeLog.setCheckTime(request.getCheckTime());

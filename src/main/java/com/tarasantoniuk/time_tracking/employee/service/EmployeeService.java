@@ -4,6 +4,8 @@ import com.tarasantoniuk.time_tracking.employee.dto.EmployeeRequest;
 import com.tarasantoniuk.time_tracking.employee.dto.EmployeeResponse;
 import com.tarasantoniuk.time_tracking.employee.entity.Employee;
 import com.tarasantoniuk.time_tracking.employee.repository.EmployeeRepository;
+import com.tarasantoniuk.time_tracking.exception.DuplicateResourceException;
+import com.tarasantoniuk.time_tracking.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,9 +27,10 @@ public class EmployeeService {
         // Check if employee already exists
         if (employeeRepository.existsByFirstNameAndLastName(
                 request.getFirstName(), request.getLastName())) {
-            throw new IllegalArgumentException(
-                    "Employee with name " + request.getFirstName() + " " +
-                            request.getLastName() + " already exists"
+            throw new DuplicateResourceException(
+                    "Employee",
+                    "name",
+                    request.getFirstName() + " " + request.getLastName()
             );
         }
 
@@ -46,7 +49,7 @@ public class EmployeeService {
     // Get employee by ID
     public EmployeeResponse getEmployeeById(Long id) {
         Employee employee = employeeRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Employee not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Employee", id));
 
         return mapToResponse(employee);
     }
@@ -71,7 +74,7 @@ public class EmployeeService {
     @Transactional
     public EmployeeResponse updateEmployee(Long id, EmployeeRequest request) {
         Employee employee = employeeRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Employee not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Employee", id));
 
         employee.setFirstName(request.getFirstName());
         employee.setLastName(request.getLastName());
@@ -88,7 +91,7 @@ public class EmployeeService {
     @Transactional
     public void deleteEmployee(Long id) {
         if (!employeeRepository.existsById(id)) {
-            throw new IllegalArgumentException("Employee not found with id: " + id);
+            throw new ResourceNotFoundException("Employee", id);
         }
 
         employeeRepository.deleteById(id);
