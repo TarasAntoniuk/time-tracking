@@ -293,6 +293,222 @@ class TimeLogRepositoryTest {
         assertThat(timeLogRepository.findById(id)).isEmpty();
     }
 
+    @Test
+    @DisplayName("Should calculate timesheet with multiple check-ins and check-outs on same day")
+    void shouldCalculateTimesheetWithMultipleCheckInsAndCheckOutsOnSameDay() {
+        // Given - 2 work sessions on the same day: 9:00-12:00 and 13:00-17:00
+        timeLogRepository.saveAll(List.of(
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0)),   // Check-in
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 12, 0)),  // Check-out
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 13, 0)),  // Check-in
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 17, 0))   // Check-out
+        ));
+
+        LocalDateTime from = LocalDateTime.of(2024, 12, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2024, 12, 31, 23, 59);
+
+        // When
+        List<TimeLogRepository.DailyWorkProjection> results =
+                timeLogRepository.calculateTimesheetNative(employeeId, from, to);
+
+        // Then
+        assertThat(results).hasSize(1); // One day
+        assertThat(results.get(0).getHoursWorked()).isEqualTo("07:00"); // 3h + 4h = 7h
+        assertThat(results.get(0).getTotalEntries()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("Should return empty timesheet for employee with no logs in period")
+    void shouldReturnEmptyTimesheetForEmployeeWithNoLogsInPeriod() {
+        // Given - log outside the query period
+        timeLogRepository.save(createTimeLog(employeeId, LocalDateTime.of(2024, 11, 15, 9, 0)));
+
+        LocalDateTime from = LocalDateTime.of(2024, 12, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2024, 12, 31, 23, 59);
+
+        // When
+        List<TimeLogRepository.DailyWorkProjection> results =
+                timeLogRepository.calculateTimesheetNative(employeeId, from, to);
+
+        // Then
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should handle timesheet boundary dates correctly")
+    void shouldHandleTimesheetBoundaryDatesCorrectly() {
+        // Given - logs exactly at the boundary
+        timeLogRepository.saveAll(List.of(
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 1, 0, 0)),   // Exactly at from
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 1, 8, 0)),   // 8 hours later
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 31, 9, 0)),  // Near the end
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 31, 17, 0))  // 8 hours later
+        ));
+
+        LocalDateTime from = LocalDateTime.of(2024, 12, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2025, 1, 1, 0, 0);  // Exclusive end
+
+        // When
+        List<TimeLogRepository.DailyWorkProjection> results =
+                timeLogRepository.calculateTimesheetNative(employeeId, from, to);
+
+        // Then
+        assertThat(results).hasSize(2); // Two days
+    }
+
+    @Test
+    @DisplayName("Should handle odd number of check-ins (missing check-out)")
+    void shouldHandleOddNumberOfCheckIns() {
+        // Given - only check-in, no check-out (still working)
+        timeLogRepository.save(createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0)));
+
+        LocalDateTime from = LocalDateTime.of(2024, 12, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2024, 12, 31, 23, 59);
+
+        // When
+        List<TimeLogRepository.DailyWorkProjection> results =
+                timeLogRepository.calculateTimesheetNative(employeeId, from, to);
+
+        // Then - unpaired check-in returns a record but with null hoursWorked
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getHoursWorked()).isNull();
+        assertThat(results.get(0).getFirstEntry()).isNotNull();
+        assertThat(results.get(0).getLastExit()).isNull();
+    }
+
+    @Test
+    @DisplayName("Should return empty present employees when no one checked in")
+    void shouldReturnEmptyPresentEmployeesWhenNoOneCheckedIn() {
+        // Given - no time logs at all
+
+        // When
+        List<TimeLogRepository.PresentEmployeeProjection> results =
+                timeLogRepository.findPresentEmployeesWithDetails(LocalDateTime.of(2024, 12, 8, 10, 0));
+
+        // Then
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should not include employee who checked out before query time")
+    void shouldNotIncludeEmployeeWhoCheckedOutBeforeQueryTime() {
+        // Given - employee checked in at 9:00, checked out at 12:00
+        timeLogRepository.saveAll(List.of(
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0)),  // Check-in
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 12, 0))  // Check-out
+        ));
+
+        // When - query at 14:00 (after check-out)
+        List<TimeLogRepository.PresentEmployeeProjection> results =
+                timeLogRepository.findPresentEmployeesWithDetails(LocalDateTime.of(2024, 12, 8, 14, 0));
+
+        // Then
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should include employee who is currently checked in")
+    void shouldIncludeEmployeeWhoIsCurrentlyCheckedIn() {
+        // Given - employee checked in at 9:00, no check-out yet
+        timeLogRepository.save(createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0)));
+
+        // When - query at 14:00 (still working)
+        List<TimeLogRepository.PresentEmployeeProjection> results =
+                timeLogRepository.findPresentEmployeesWithDetails(LocalDateTime.of(2024, 12, 8, 14, 0));
+
+        // Then
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getEmployeeId()).isEqualTo(employeeId);
+    }
+
+    @Test
+    @DisplayName("Should handle employee with multiple check-in/check-out cycles")
+    void shouldHandleEmployeeWithMultipleCheckInCheckOutCycles() {
+        // Given - morning session: 9:00-12:00, afternoon session: 13:00-?
+        timeLogRepository.saveAll(List.of(
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0)),   // Check-in
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 12, 0)),  // Check-out
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 13, 0))   // Check-in (back from lunch)
+        ));
+
+        // When - query at 14:00 (during afternoon session)
+        List<TimeLogRepository.PresentEmployeeProjection> results =
+                timeLogRepository.findPresentEmployeesWithDetails(LocalDateTime.of(2024, 12, 8, 14, 0));
+
+        // Then
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getEmployeeId()).isEqualTo(employeeId);
+    }
+
+    @Test
+    @DisplayName("Should not include employee when query time is before first check-in")
+    void shouldNotIncludeEmployeeWhenQueryTimeIsBeforeFirstCheckIn() {
+        // Given - employee checks in at 9:00
+        timeLogRepository.save(createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0)));
+
+        // When - query at 8:00 (before check-in)
+        List<TimeLogRepository.PresentEmployeeProjection> results =
+                timeLogRepository.findPresentEmployeesWithDetails(LocalDateTime.of(2024, 12, 8, 8, 0));
+
+        // Then
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should handle cross-day work correctly for present employees")
+    void shouldHandleCrossDayWorkCorrectlyForPresentEmployees() {
+        // Given - employee checked in yesterday and hasn't checked out
+        timeLogRepository.save(createTimeLog(employeeId, LocalDateTime.of(2024, 12, 7, 22, 0))); // Night shift
+
+        // When - query the next morning
+        List<TimeLogRepository.PresentEmployeeProjection> results =
+                timeLogRepository.findPresentEmployeesWithDetails(LocalDateTime.of(2024, 12, 8, 6, 0));
+
+        // Then
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getEmployeeId()).isEqualTo(employeeId);
+    }
+
+    @Test
+    @DisplayName("Should return projection with all employee fields populated")
+    void shouldReturnProjectionWithAllEmployeeFieldsPopulated() {
+        // Given
+        timeLogRepository.save(createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0)));
+
+        // When
+        List<TimeLogRepository.PresentEmployeeProjection> results =
+                timeLogRepository.findPresentEmployeesWithDetails(LocalDateTime.of(2024, 12, 8, 10, 0));
+
+        // Then
+        assertThat(results).hasSize(1);
+        TimeLogRepository.PresentEmployeeProjection projection = results.get(0);
+        assertThat(projection.getEmployeeId()).isEqualTo(employeeId);
+        assertThat(projection.getFirstName()).isEqualTo("John");
+        assertThat(projection.getLastName()).isEqualTo("Doe");
+        assertThat(projection.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Should calculate timesheet with exact period boundaries including start time")
+    void shouldCalculateTimesheetWithExactPeriodBoundariesIncludingStartTime() {
+        // Given - log exactly at the from boundary
+        timeLogRepository.saveAll(List.of(
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 9, 0, 0)),
+                createTimeLog(employeeId, LocalDateTime.of(2024, 12, 8, 17, 0, 0))
+        ));
+
+        LocalDateTime from = LocalDateTime.of(2024, 12, 8, 9, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2024, 12, 8, 23, 59, 59);
+
+        // When
+        List<TimeLogRepository.DailyWorkProjection> results =
+                timeLogRepository.calculateTimesheetNative(employeeId, from, to);
+
+        // Then
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getHoursWorked()).isEqualTo("08:00");
+    }
+
     // Helper method
     private TimeLog createTimeLog(Long empId, LocalDateTime checkTime) {
         TimeLog log = new TimeLog();
