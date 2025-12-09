@@ -19,3 +19,4 @@ target/
 /mvnw
 /mvnw.cmd
 /sql/time_tr_backup.sql
+/.vscode/
