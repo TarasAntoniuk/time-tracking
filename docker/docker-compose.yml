@@ -8,7 +8,6 @@ services:
     ports:
       - "127.0.0.1:8081:8081"
     environment:
-      # Connect to shared PostgreSQL
       SPRING_DATASOURCE_URL: jdbc:postgresql://shared-postgres:5432/time_tracking
       SPRING_DATASOURCE_USERNAME: timetracking_user
       SPRING_DATASOURCE_PASSWORD: ${TIMETRACKING_DB_PASSWORD}
@@ -20,7 +19,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "--header=Host: localhost", "http://localhost:8081/actuator/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/api/employees"]
       interval: 30s
       timeout: 10s
       retries: 3
