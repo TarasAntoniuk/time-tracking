@@ -81,6 +81,22 @@ jobs:
             echo "✅ Directories ready"
           ENDSSH
 
+      - name: Ensure .env exists
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }} \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            set -e
+            cd /srv/apps/time-tracking/docker
+          
+            if [ ! -f .env ]; then
+              echo "❌ ERROR: .env file not found!"
+              echo "Please create .env with TIMETRACKING_DB_PASSWORD"
+              exit 1
+            fi
+          
+            echo "✅ .env file exists"
+          ENDSSH
+
       - name: Install rsync
         run: sudo apt-get update && sudo apt-get install -y rsync
 
@@ -93,22 +109,9 @@ jobs:
       - name: Copy Docker files
         run: |
           rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }}" \
+            --exclude='.env' \
             docker/ \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/srv/apps/time-tracking/docker/
-
-      - name: Copy nginx config to finance
-        run: |
-          rsync -avz -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }}" \
-            docker/nginx/conf.d/time-tracking.conf \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/srv/apps/finance/docker/nginx/conf.d/time-tracking.conf
-
-      - name: Reload nginx
-        run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p ${{ secrets.SERVER_SSH_PORT }} \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
-            docker restart finance-nginx
-            echo "✅ Nginx reloaded"
-          ENDSSH
 
       - name: Deploy application
         run: |
@@ -117,9 +120,8 @@ jobs:
             set -e
             cd /srv/apps/time-tracking/docker
           
-            echo "🔄 Stopping old containers..."
-            docker compose stop time-tracking-app || true
-            docker rm time-tracking-app || true
+            echo "🔄 Stopping old container..."
+            docker compose down || true
           
             echo "🚀 Starting Time Tracking API..."
             docker compose up -d --build
@@ -133,13 +135,17 @@ jobs:
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
           
             echo "📦 Running containers:"
-            docker ps | grep time-tracking
+            docker ps | grep -E "time-tracking|shared"
+          
+            echo ""
+            echo "🌐 Network status:"
+            docker network inspect app-network --format '{{range .Containers}}{{.Name}} {{end}}'
           
             echo ""
             echo "🏥 Health check (with retry)..."
             SUCCESS=false
             for i in {1..30}; do
-              if curl -f https://timetracking.tarasantoniuk.com/api/employees 2>/dev/null; then
+              if curl -f http://localhost:8081/actuator/health 2>/dev/null; then
                 echo ""
                 echo "✅ Time Tracking API is healthy!"
                 SUCCESS=true
