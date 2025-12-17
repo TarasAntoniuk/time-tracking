@@ -145,7 +145,7 @@ jobs:
             echo "🏥 Health check (with retry)..."
             SUCCESS=false
             for i in {1..30}; do
-              if curl -f http://localhost:8081/actuator/health 2>/dev/null; then
+              if curl -f http://localhost:8081/api/employees 2>/dev/null; then
                 echo ""
                 echo "✅ Time Tracking API is healthy!"
                 SUCCESS=true
